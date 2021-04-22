@@ -213,7 +213,7 @@ how much faster depends on the order of the moves,
 because if by some misfortune they happen to be ordered from worst to best, we can't prune anything at all
 esentially, the more good moves are searched early on, the more branches will be pruned and the faster it will be
 */
-int Search (int depth, intt alpha, int beta) {
+int Search (int depth, int alpha, int beta) {
 
 	if (depth == 0) {
 		return Evaluate ();
@@ -245,9 +245,11 @@ int Search (int depth, intt alpha, int beta) {
 	return alpha;
 }
 
-/* We don't know in advance which moves are good, but we can make some guesses */
+// We don't know in advance which moves are good, but we can make some guesses
 public void OrderMoves (List<Move> moves) {
+
 	foreach (Move move in moves) {
+
 		int moveScoreGuess = 0;
 		int movePieceType = Piece.PieceType (Board.Square[move.StartSquare]);
 		int capturePieceType = Piece.PieceType (Board.Square[move.TargetSquare]);
@@ -267,4 +269,79 @@ public void OrderMoves (List<Move> moves) {
 			moveScoreGuess -= GetPieceValue (movePieceType);
 		}
 	}
+}
+
+
+/* Idea 3 - Captures Search function
+
+Our evaluation function is only going to be remotely reliable if no piece can be captured on the next move
+The new Search function looks only at captures, and just keeps going until no captures are left
+*/
+
+//There's no depth limit anymore
+int SearchAllCaptures (int alpha, int beta) {
+
+	/* Captures aren't tipically forces, so see what the eval is before making a capture
+	Otherwise if only bad captures are available, the position will be evaluated as bad,
+	even if good non-capture moves exist*/
+	int evaluation = Evaluation.Evaluate ();
+	if (evaluation >= beta) {
+		return beta
+	}
+	alpha = Max (alpha, evaluation);
+	if (depth == 0) {
+		return Evaluate ();
+	}
+
+	//We're now only generating capture moves
+	List<Move> captureMoves = moveGenerator.GenerateMoves (onlyGenerateCaptures : true);
+	OrderMoves (captureMoves);
+
+	foreach(Move captureMove in captureMoves) {
+		
+		Board.MakeMove (captureMove);
+		evaluation = -SearchAllCaptures (-beta, -alpha);
+		Board.UnmakeMove (captureMove);
+
+
+		if (evaluation >= beta) {
+			return beta;
+			alpha = Max (alpha, evaluation);
+		}
+	}
+	return alpha;
+}
+
+
+/* This evaluation function enables it to solve quite a variety of endgame positions
+
+To avoid situations in which the computer cannot find a forced checkmate and there are no pieces to try winning
+in which case it shuffles around aimlessly*/
+int ForceKingToCornerEndgameEval (int friendlyKingSquare, int opponentKingSquare, float endgameWeight) {
+	int evaluation = 0;
+
+	/*Favour positions where opponent king has been forced away from the centre (to edge or corner of board)
+	This makes it easier to deliver checkmate (int endgame positions)*/
+	int opponentKingRank = Rank (friendlyKingSquare);
+	int opponentKingFile = File(friendlyKingSquare);
+
+	int opponentKingDstToCentreFile = Max (3 - opponentKingFile, opponentKingFile -4);
+	int opponentKingDstToCentreRank = Max (3 - opponentKingRank, opponentKingRank -4);
+	int opponentKingDstFromCentre = opponentKingDstToCentreFile + opponentKingDstToCentreRank;
+
+	evaluation += opponentKingDstFromCentre;
+
+	//Incentivize moving king closer to opponent king to help cut off escape routes and assist with checkmate
+	int friendlyKingRank = Rank (friendlyKingSquare);
+	int friendlyKingFile = File(friendlyKingSquare);
+
+	int dstBetweenKingsFile = Abs (friendlyKingFile - opponentKingFile);
+	int dstBetweenKingsRank = Abs (frienlyKingRank - opponentKingRank);
+	int dstBetweenKings = fileDst + rankDst;
+
+	//It also incentivises moving the king closer to the opponent's king to help cut off its escape routes and assist with the checkmate if neccesary
+	evaluation += 14 - dstBetweenKings;
+
+	//As this only applies to the endgame, so this value increases in significance as the opponent has fewer and fewer pieces remaining
+	return (int)(evaluation * 10 * endgameWeight);
 }
